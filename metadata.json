@@ -1,0 +1,6 @@
+{
+  "name": "ClipVault",
+  "description": "A premium, privacy-first clipboard manager by AILoopLabs. Keep, search, pin, edit, and organize your clipboard history effortlessly.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
