@@ -31,24 +31,29 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Extract Version
+        run: |
+          VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n1 | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Build Debug APK
         run: gradle assembleDebug
 
       - name: Copy & Rename APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/ClipVault-Android-v1.0.0.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/ClipVault-Android-v${{ env.VERSION }}.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipVault-Android-v1.0.0-apk
-          path: dist/ClipVault-Android-v1.0.0.apk
+          name: ClipVault-Android-v${{ env.VERSION }}-apk
+          path: dist/ClipVault-Android-v${{ env.VERSION }}.apk
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "ClipVault Android v1.0.0"
-          files: dist/ClipVault-Android-v1.0.0.apk
+          tag_name: v${{ env.VERSION }}
+          name: "ClipVault Android v${{ env.VERSION }}"
+          files: dist/ClipVault-Android-v${{ env.VERSION }}.apk
           generate_release_notes: true
