@@ -3,17 +3,22 @@ package com.example.ui
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.ClipDatabase
 import com.example.data.ClipItem
 import com.example.data.ClipRepository
 import com.example.data.ClipType
+import com.example.service.ClipVaultAccessibilityService
+import com.example.service.ClipVaultForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +49,9 @@ data class ClipVaultUiState(
     val showUseCases: Boolean = false,
     val showPrivacyInfo: Boolean = false,
     val showSettings: Boolean = false,
+    val showBackgroundSetupDialog: Boolean = false,
+    val isBackgroundMonitorActive: Boolean = true,
+    val isAccessibilityGranted: Boolean = false,
     val snackbarMessage: String? = null,
     val autoTrimWhitespace: Boolean = true,
     val hapticFeedback: Boolean = true,
@@ -84,6 +92,15 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
 
+    private val _showBackgroundSetupDialog = MutableStateFlow(false)
+    val showBackgroundSetupDialog: StateFlow<Boolean> = _showBackgroundSetupDialog.asStateFlow()
+
+    private val _isBackgroundMonitorActive = MutableStateFlow(prefs.getBoolean("bg_monitor_enabled", true))
+    val isBackgroundMonitorActive: StateFlow<Boolean> = _isBackgroundMonitorActive.asStateFlow()
+
+    private val _isAccessibilityGranted = MutableStateFlow(false)
+    val isAccessibilityGranted: StateFlow<Boolean> = _isAccessibilityGranted.asStateFlow()
+
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
@@ -101,6 +118,12 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         val database = ClipDatabase.getDatabase(application, viewModelScope)
         repository = ClipRepository(database.clipDao())
+
+        // Start background monitor foreground service if enabled
+        if (_isBackgroundMonitorActive.value) {
+            ClipVaultForegroundService.startService(application)
+        }
+        checkAccessibilityStatus()
     }
 
     val uiState: StateFlow<ClipVaultUiState> = combine(
@@ -116,6 +139,9 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
         _showUseCases,
         _showPrivacyInfo,
         _showSettings,
+        _showBackgroundSetupDialog,
+        _isBackgroundMonitorActive,
+        _isAccessibilityGranted,
         _snackbarMessage,
         _autoTrimWhitespace,
         _hapticFeedback,
@@ -134,10 +160,13 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
         val showUseCases = params[9] as Boolean
         val showPrivacy = params[10] as Boolean
         val showSettings = params[11] as Boolean
-        val snackbar = params[12] as String?
-        val autoTrim = params[13] as Boolean
-        val haptics = params[14] as Boolean
-        val maskSecrets = params[15] as Boolean
+        val showBgSetup = params[12] as Boolean
+        val bgActive = params[13] as Boolean
+        val a11yGranted = params[14] as Boolean
+        val snackbar = params[15] as String?
+        val autoTrim = params[16] as Boolean
+        val haptics = params[17] as Boolean
+        val maskSecrets = params[18] as Boolean
 
         val filteredClips = allClips.filter { clip ->
             // Filter by search query
@@ -169,6 +198,9 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
             showUseCases = showUseCases,
             showPrivacyInfo = showPrivacy,
             showSettings = showSettings,
+            showBackgroundSetupDialog = showBgSetup,
+            isBackgroundMonitorActive = bgActive,
+            isAccessibilityGranted = a11yGranted,
             snackbarMessage = snackbar,
             autoTrimWhitespace = autoTrim,
             hapticFeedback = haptics,
@@ -179,6 +211,50 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ClipVaultUiState()
     )
+
+    fun checkAccessibilityStatus() {
+        val context = getApplication<Application>()
+        val expectedComponent = ComponentName(context, ClipVaultAccessibilityService::class.java).flattenToString()
+        val enabledServices = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: ""
+        val isGranted = enabledServices.contains(expectedComponent) || ClipVaultAccessibilityService.isServiceRunning
+        _isAccessibilityGranted.value = isGranted
+    }
+
+    fun setBackgroundMonitorActive(active: Boolean) {
+        _isBackgroundMonitorActive.value = active
+        prefs.edit().putBoolean("bg_monitor_enabled", active).apply()
+        val context = getApplication<Application>()
+        if (active) {
+            ClipVaultForegroundService.startService(context)
+            _snackbarMessage.value = "Background clipboard monitor started"
+        } else {
+            ClipVaultForegroundService.stopService(context)
+            _snackbarMessage.value = "Background clipboard monitor paused"
+        }
+        triggerHapticFeedback()
+    }
+
+    fun openBackgroundSetupDialog() {
+        _showBackgroundSetupDialog.value = true
+    }
+
+    fun closeBackgroundSetupDialog() {
+        _showBackgroundSetupDialog.value = false
+    }
+
+    fun openAccessibilitySettings() {
+        val context = getApplication<Application>()
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            context.startActivity(intent)
+        } catch (_: Exception) {}
+        closeBackgroundSetupDialog()
+    }
 
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
@@ -376,17 +452,13 @@ class ClipVaultViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun syncClipboardOnResume() {
+        checkAccessibilityStatus()
         val clip = clipboardManager.primaryClip
         if (clip != null && clip.itemCount > 0) {
             val text = clip.getItemAt(0)?.text?.toString()
             if (!text.isNullOrBlank() && text != lastObservedClipboardText) {
-                // If this is the first run, record it
-                if (lastObservedClipboardText != null) {
-                    lastObservedClipboardText = text
-                    addClip(text)
-                } else {
-                    lastObservedClipboardText = text
-                }
+                lastObservedClipboardText = text
+                addClip(text)
             }
         }
     }

@@ -72,6 +72,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.ClipItem
 import com.example.ui.components.AddClipDialog
+import com.example.ui.components.BackgroundSetupDialog
+import com.example.ui.components.BackgroundSyncCard
 import com.example.ui.components.ClearConfirmDialog
 import com.example.ui.components.ClipCard
 import com.example.ui.components.EditClipDialog
@@ -181,6 +183,15 @@ fun ClipVaultMainScreen(
                 onPrivacyClick = { viewModel.openPrivacyInfo() }
             )
 
+            // Background Auto-Capture Monitoring Card
+            BackgroundSyncCard(
+                isServiceActive = uiState.isBackgroundMonitorActive,
+                isAccessibilityGranted = uiState.isAccessibilityGranted,
+                onToggleService = { viewModel.setBackgroundMonitorActive(it) },
+                onOpenSetup = { viewModel.openBackgroundSetupDialog() },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+
             // Search Bar & Filter Chips
             SearchAndFilterBar(
                 searchQuery = uiState.searchQuery,
@@ -280,6 +291,13 @@ fun ClipVaultMainScreen(
         )
     }
 
+    if (uiState.showBackgroundSetupDialog) {
+        BackgroundSetupDialog(
+            onOpenSettings = { viewModel.openAccessibilitySettings() },
+            onDismiss = { viewModel.closeBackgroundSetupDialog() }
+        )
+    }
+
     if (uiState.showSettings) {
         SettingsDialog(
             autoTrim = uiState.autoTrimWhitespace,
@@ -288,6 +306,9 @@ fun ClipVaultMainScreen(
             onHapticsChange = { viewModel.setHaptics(it) },
             maskSecrets = uiState.maskSecretsByDefault,
             onMaskSecretsChange = { viewModel.setMaskSecrets(it) },
+            bgMonitor = uiState.isBackgroundMonitorActive,
+            onBgMonitorChange = { viewModel.setBackgroundMonitorActive(it) },
+            onOpenBackgroundSetup = { viewModel.openBackgroundSetupDialog() },
             onRestoreStarterClips = { viewModel.resetToStarterPack() },
             onDismiss = { viewModel.closeSettings() }
         )

@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">ClipVault</string>
+    <string name="accessibility_service_label">ClipVault Background Auto-Capture</string>
+    <string name="accessibility_service_description">Allows ClipVault to automatically capture copied text from Messages, browsers, and other apps directly into your secure local vault.</string>
 </resources>

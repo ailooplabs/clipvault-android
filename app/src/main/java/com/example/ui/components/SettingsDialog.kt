@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -42,6 +45,9 @@ fun SettingsDialog(
     onHapticsChange: (Boolean) -> Unit,
     maskSecrets: Boolean,
     onMaskSecretsChange: (Boolean) -> Unit,
+    bgMonitor: Boolean,
+    onBgMonitorChange: (Boolean) -> Unit,
+    onOpenBackgroundSetup: () -> Unit,
     onRestoreStarterClips: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -105,6 +111,15 @@ fun SettingsDialog(
 
                 // Settings List
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Always Run in Background
+                    SettingToggleRow(
+                        title = "Always run in background",
+                        subtitle = "Keeps ClipVault service active 24/7 to capture clipboard automatically",
+                        checked = bgMonitor,
+                        onCheckedChange = onBgMonitorChange,
+                        testTag = "setting_bg_monitor"
+                    )
+
                     // Auto-trim Whitespace
                     SettingToggleRow(
                         title = "Auto-trim whitespace",
@@ -133,9 +148,38 @@ fun SettingsDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Actions
+                // Setup External Apps Auto-Capture Button
+                Button(
+                    onClick = {
+                        onOpenBackgroundSetup()
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("setup_auto_capture_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = PrimaryIndigo
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        text = "Setup Auto-Capture for Other Apps",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Restore Starter Clips
                 OutlinedButton(
                     onClick = {
                         onRestoreStarterClips()
@@ -160,7 +204,7 @@ fun SettingsDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Footer branding
                 Card(
